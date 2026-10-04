@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ff4fa3">
+  <title>Pyaari AI 💕</title>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;
+      background:radial-gradient(circle at top,#ffd8eb 0,#ffb3d5 42%,#c98cff 100%);
+      display:flex; align-items:center; justify-content:center; padding:14px;
+    }
+    .app{
+      width:min(440px,100%); height:min(760px,calc(100vh - 28px));
+      min-height:560px; display:flex; flex-direction:column; overflow:hidden;
+      background:rgba(255,255,255,.94); border:1px solid rgba(255,255,255,.7);
+      border-radius:30px; box-shadow:0 20px 60px rgba(80,0,60,.25); backdrop-filter:blur(14px);
+    }
+    header{padding:18px 18px 12px; text-align:center; position:relative}
+    .avatar{width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid #ff4fa3;box-shadow:0 5px 18px #ff8fc7}
+    h1{font-size:21px;color:#f12d8b;margin:7px 0 2px}
+    .status{font-size:12px;color:#777}
+    .online{display:inline-block;width:8px;height:8px;border-radius:50%;background:#21c76a;margin-right:4px}
+    .actions{position:absolute;right:14px;top:14px;display:flex;gap:6px}
+    .icon-btn{border:0;background:#fff0f7;border-radius:50%;width:38px;height:38px;cursor:pointer;font-size:17px}
+    #chat{flex:1;overflow-y:auto;padding:12px 14px 18px;background:linear-gradient(#fff7fb,#fff0f7)}
+    .msg{display:flex;margin:8px 0}.msg.user{justify-content:flex-end}
+    .bubble{max-width:82%;padding:10px 13px;border-radius:18px;line-height:1.42;white-space:pre-wrap;word-break:break-word;font-size:15px}
+    .ai .bubble{background:white;border:1px solid #ffd6e8;border-bottom-left-radius:6px}
+    .user .bubble{background:#ff4fa3;color:#fff;border-bottom-right-radius:6px}
+    .time{font-size:10px;opacity:.55;margin:3px 6px 0}
+    .typing{display:flex;gap:4px;align-items:center;background:white;border:1px solid #ffd6e8;padding:11px 13px;border-radius:18px;border-bottom-left-radius:6px;width:max-content}
+    .dot{width:7px;height:7px;background:#ff6bad;border-radius:50%;animation:b 1s infinite}.dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
+    @keyframes b{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+    .composer{padding:11px;display:flex;gap:7px;background:#fff;border-top:1px solid #ffd8e9;padding-bottom:max(11px,env(safe-area-inset-bottom))}
+    input{flex:1;min-width:0;border:2px solid #ffb5d5;border-radius:25px;padding:12px 15px;font-size:15px;outline:none}
+    input:focus{border-color:#ff4fa3}
+    button.send{width:48px;height:48px;border:0;border-radius:50%;background:#ff4fa3;color:white;font-size:19px;cursor:pointer;box-shadow:0 5px 14px #ff9ac8}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .hint{text-align:center;font-size:10px;color:#999;padding:0 10px 7px;background:#fff}
+    @media(max-height:620px){.app{height:100vh;min-height:0;border-radius:0}.modal{}}
+  </style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <div class="actions">
+      <button class="icon-btn" id="voiceBtn" title="Voice on/off">🔊</button>
+      <button class="icon-btn" id="clearBtn" title="Clear chat">🗑️</button>
+    </div>
+    <img class="avatar" src="https://i.pravatar.cc/160?img=5" alt="Pyaari AI">
+    <h1>Tumhari Pyaari AI 💕</h1>
+    <div class="status"><span class="online"></span>Online · AI Companion</div>
+  </header>
+
+  <section id="chat" aria-live="polite"></section>
+
+  <div class="hint">AI-generated replies · API key browser mein expose nahi hoti</div>
+  <form class="composer" id="form">
+    <input id="input" autocomplete="off" maxlength="2000" placeholder="Jaan kuch bolo na..." />
+    <button class="send" id="send" type="submit">💌</button>
+  </form>
+</main>
+
+<script>
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+const form = document.getElementById("form");
+const voiceBtn = document.getElementById("voiceBtn");
+const clearBtn = document.getElementById("clearBtn");
+
+let history = [];
+let voiceOn = true;
+
+function timeNow(){
+  return new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+}
+
+function addMessage(text, role, save=true){
+  const row = document.createElement("div");
+  row.className = "msg " + (role === "user" ? "user" : "ai");
+
+  const wrap = document.createElement("div");
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = text;
+
+  const t = document.createElement("div");
+  t.className = "time";
+  t.textContent = timeNow();
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(t);
+  row.appendChild(wrap);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+
+  if(save){
+    history.push({role, content:text});
+    history = history.slice(-20);
+    localStorage.setItem("pyaari_history", JSON.stringify(history));
+  }
+}
+
+function typing(show){
+  const old = document.getElementById("typing");
+  if(old) old.remove();
+  if(!show) return;
+
+  const row = document.createElement("div");
+  row.className = "msg ai";
+  row.id = "typing";
+  row.innerHTML = '<div class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function speak(text){
+  if(!voiceOn || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "hi-IN";
+  u.rate = .93;
+  u.pitch = 1.12;
+  speechSynthesis.speak(u);
+}
+
+async function sendMessage(){
+  const text = input.value.trim();
+  if(!text || send.disabled) return;
+
+  addMessage(text, "user");
+  input.value = "";
+  send.disabled = true;
+  typing(true);
+
+  try{
+    const r = await fetch("/api/chat", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({messages:history})
+    });
+
+    const data = await r.json();
+    typing(false);
+
+    const reply = data.reply || "Hmm... abhi reply nahi mil paaya 🥺";
+    addMessage(reply, "assistant");
+    speak(reply);
+  }catch(e){
+    typing(false);
+    addMessage("Network problem aa gayi 😔 Server check karke dobara try karo.", "assistant");
+  }finally{
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+function load(){
+  try{
+    history = JSON.parse(localStorage.getItem("pyaari_history") || "[]");
+    if(!Array.isArray(history)) history=[];
+  }catch{history=[]}
+
+  if(history.length){
+    history.forEach(m => addMessage(m.content, m.role, false));
+  }else{
+    addMessage("Hii 🥺💕 Kahan the tum? Aaj kya kar rahe ho?", "assistant");
+  }
+}
+
+form.addEventListener("submit", e => {e.preventDefault(); sendMessage()});
+input.addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey){e.preventDefault();sendMessage();}
+});
+
+voiceBtn.addEventListener("click", ()=>{
+  voiceOn = !voiceOn;
+  voiceBtn.textContent = voiceOn ? "🔊" : "🔇";
+  if(!voiceOn && "speechSynthesis" in window) speechSynthesis.cancel();
+});
+
+clearBtn.addEventListener("click", ()=>{
+  if(!confirm("Chat history clear karni hai?")) return;
+  history=[];
+  localStorage.removeItem("pyaari_history");
+  chat.innerHTML="";
+  addMessage("Hii 🥺💕 Nayi chat shuru karein?", "assistant");
+});
+
+load();
+</script>
+</body>
+</html>
